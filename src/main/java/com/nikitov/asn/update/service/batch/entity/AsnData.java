@@ -1,16 +1,18 @@
 package com.nikitov.asn.update.service.batch.entity;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
-import lombok.Data;
+import jakarta.persistence.*;
+import lombok.*;
 
 @Entity
 @Table(name = "asn_data")
-@Data
+@EqualsAndHashCode
+@ToString
+@NoArgsConstructor
+@Setter
+@Getter
 public class AsnData {
+
     @Id
-    private Long id;
     private long rangeStart;
     private long rangeEnd;
     private long asNumber;

@@ -7,5 +7,6 @@
     http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd">
 
     <include file="/dblogs/changelog/changes/1-create-asn-data.sql"/>
+    <include file="/dblogs/changelog/changes/2-create-batch-meta.sql"/>
 
 </databaseChangeLog>
