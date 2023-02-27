@@ -16,6 +16,7 @@ import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
@@ -31,6 +32,12 @@ public class BatchConfig extends DefaultBatchConfiguration {
     private final PlatformTransactionManager transactionManager;
     private final AsnDataRepository repository;
 
+    @Value("${batch.job.chunk-size}")
+    private int chunkSize;
+
+    @Value("${batch.job.classpath-tsv-resource-name}")
+    private String resourceName;
+
     @Bean
     public Job asnDataImportJob(Step importAsnUsersStep) {
         return new JobBuilder("asnDataImportJob", super.jobRepository())
@@ -41,8 +48,8 @@ public class BatchConfig extends DefaultBatchConfiguration {
 
     @Bean
     public Step importAsnDataStep() {
-        return new StepBuilder("sampleStep", super.jobRepository())
-                .<AsnDataFileRecord, AsnData>chunk(5000, transactionManager)
+        return new StepBuilder("importAsnDataStep", super.jobRepository())
+                .<AsnDataFileRecord, AsnData>chunk(chunkSize, transactionManager)
                 .reader(reader())
                 .processor(processor())
                 .writer(writer())
@@ -54,7 +61,7 @@ public class BatchConfig extends DefaultBatchConfiguration {
     public ItemReader<AsnDataFileRecord> reader() {
         return new FlatFileItemReaderBuilder<AsnDataFileRecord>()
                 .name("asnDataReader")
-                .resource(new ClassPathResource("ip2asn-v4-u32.tsv"))
+                .resource(new ClassPathResource(resourceName))
                 .delimited()
                 .delimiter(DELIMITER_TAB)
                 .includedFields(0, 1, 2, 3, 4)
@@ -78,6 +85,6 @@ public class BatchConfig extends DefaultBatchConfiguration {
 
     @Bean
     public ItemWriter<AsnData> writer() {
-        return repository::saveAllAndFlush;
+        return repository::saveAll;
     }
 }

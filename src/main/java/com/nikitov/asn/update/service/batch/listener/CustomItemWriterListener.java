@@ -9,6 +9,6 @@ public class CustomItemWriterListener<T> implements ItemWriteListener<T> {
 
     @Override
     public void afterWrite(Chunk<? extends T> items) {
-        log.info("Chunk has written: {}", items.size());
+        log.info("  Chunk has written: {}", items.size());
     }
 }
