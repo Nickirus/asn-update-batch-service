@@ -5,28 +5,37 @@ import com.nikitov.asn.update.service.batch.entity.AsnData;
 import com.nikitov.asn.update.service.batch.listener.CustomItemWriterListener;
 import com.nikitov.asn.update.service.batch.repository.AsnDataRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.batch.core.Job;
-import org.springframework.batch.core.Step;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.batch.core.*;
 import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
 import org.springframework.batch.core.configuration.support.DefaultBatchConfiguration;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.item.ItemProcessor;
-import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
+import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.transaction.PlatformTransactionManager;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.net.URL;
+import java.nio.channels.Channels;
+import java.nio.channels.ReadableByteChannel;
+import java.util.Optional;
+import java.util.zip.GZIPInputStream;
 
 import static org.springframework.batch.item.file.transform.DelimitedLineTokenizer.DELIMITER_TAB;
 
 @Configuration
 @EnableBatchProcessing
 @RequiredArgsConstructor
+@Slf4j
 public class BatchConfig extends DefaultBatchConfiguration {
 
     private final PlatformTransactionManager transactionManager;
@@ -35,8 +44,8 @@ public class BatchConfig extends DefaultBatchConfiguration {
     @Value("${batch.job.chunk-size}")
     private int chunkSize;
 
-    @Value("${batch.job.classpath-tsv-resource-name}")
-    private String resourceName;
+    @Value("${batch.job.remote-resource-url}")
+    private String url;
 
     @Bean
     public Job asnDataImportJob(Step importAsnUsersStep) {
@@ -47,10 +56,18 @@ public class BatchConfig extends DefaultBatchConfiguration {
     }
 
     @Bean
-    public Step importAsnDataStep() {
+    public Step importAsnDataStep(FlatFileItemReader<AsnDataFileRecord> reader) {
         return new StepBuilder("importAsnDataStep", super.jobRepository())
                 .<AsnDataFileRecord, AsnData>chunk(chunkSize, transactionManager)
+                // TODO: 01.03.2023 add condition with a checking last update date of the resource
                 .reader(reader())
+                .listener(new StepExecutionListener() {
+                    @Override
+                    public void beforeStep(StepExecution stepExecution) {
+                        getActualTsvResource().ifPresentOrElse(reader::setResource,
+                                () -> stepExecution.getJobExecution().setStatus(BatchStatus.FAILED));
+                    }
+                })
                 .processor(processor())
                 .writer(writer())
                 .listener(new CustomItemWriterListener<>())
@@ -58,10 +75,11 @@ public class BatchConfig extends DefaultBatchConfiguration {
     }
 
     @Bean
-    public ItemReader<AsnDataFileRecord> reader() {
+    public FlatFileItemReader<AsnDataFileRecord> reader() {
         return new FlatFileItemReaderBuilder<AsnDataFileRecord>()
                 .name("asnDataReader")
-                .resource(new ClassPathResource(resourceName))
+                // TODO: 01.03.2023 mb we can use just a mock resource for the first init before the start
+                .resource(new InputStreamResource(new ByteArrayInputStream(new byte[]{})))
                 .delimited()
                 .delimiter(DELIMITER_TAB)
                 .includedFields(0, 1, 2, 3, 4)
@@ -86,5 +104,19 @@ public class BatchConfig extends DefaultBatchConfiguration {
     @Bean
     public ItemWriter<AsnData> writer() {
         return repository::saveAll;
+    }
+
+    private Optional<InputStreamResource> getActualTsvResource() {
+        byte[] buffer;
+        try {
+            ReadableByteChannel readableByteChannel = Channels.newChannel(new URL(url).openStream());
+            var gis = new GZIPInputStream(Channels.newInputStream(readableByteChannel));
+            buffer = gis.readAllBytes();
+            gis.close();
+        } catch (IOException e) {
+            log.error("It's error while reading remote resource. {} - {}", e.getClass().getName(), e.getMessage());
+            return Optional.empty();
+        }
+        return Optional.of(new InputStreamResource(new ByteArrayInputStream(buffer)));
     }
 }
