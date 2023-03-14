@@ -59,7 +59,6 @@ public class BatchConfig extends DefaultBatchConfiguration {
     public Step importAsnDataStep(FlatFileItemReader<AsnDataFileRecord> reader) {
         return new StepBuilder("importAsnDataStep", super.jobRepository())
                 .<AsnDataFileRecord, AsnData>chunk(chunkSize, transactionManager)
-                // TODO: 01.03.2023 add condition with a checking last update date of the resource
                 .reader(reader())
                 .listener(new StepExecutionListener() {
                     @Override
@@ -114,7 +113,7 @@ public class BatchConfig extends DefaultBatchConfiguration {
             buffer = gis.readAllBytes();
             gis.close();
         } catch (IOException e) {
-            log.error("It's error while reading remote resource. {} - {}", e.getClass().getName(), e.getMessage());
+            log.error("Error while reading remote resource. {} - {}", e.getClass().getName(), e.getMessage());
             return Optional.empty();
         }
         return Optional.of(new InputStreamResource(new ByteArrayInputStream(buffer)));
