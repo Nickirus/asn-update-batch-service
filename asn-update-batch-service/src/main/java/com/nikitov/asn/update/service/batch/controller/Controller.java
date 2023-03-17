@@ -27,6 +27,7 @@ public class Controller {
     private String url;
 
     @GetMapping("run")
+    // TODO: 16.03.2023 add some parameter (or new endpoint) to ability to force run even if the same job was already run
     public ResponseEntity<Void> handle() throws Exception {
         jobLauncher.run(job, new JobParametersBuilder()
                 .addString("resourceDate", lastUpdateExtractor.getResourceLastUpdatedHeaderValue(URI.create(url))
